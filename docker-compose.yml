@@ -1,0 +1,32 @@
+services:
+  # PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: reservoir_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # MinIO (S3-compatible object storage)
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: minio_local
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"  # API (S3-compatible)
+      - "9001:9001"  # Web console
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./minio-data:/data
+
+volumes:
+  pgdata:
