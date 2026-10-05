@@ -45,6 +45,7 @@ htmlcov/
 /data/
 /tmp/
 *.log
+/minio-data/
 
 # ==========================================
 # 6. IDE & OS Files

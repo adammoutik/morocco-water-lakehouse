@@ -1,0 +1,50 @@
+import requests
+import logging 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+BASE_URL = os.environ.get('OPEN_METEO_URL')
+
+# TODO configure it centrally
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+def extract_historical_weather(latitude: float, longitude: float, start_date: str, end_date: str) -> dict:
+    """
+    Extracts historical weather data from the Open-Meteo API.
+
+    Args:
+        latitude (float): Latitude of the location.
+        longitude (float): Longitude of the location.
+        start_date (str): Start date in 'YYYY-MM-DD' format.
+        end_date (str): End date in 'YYYY-MM-DD' format.
+
+    Returns:
+        dict: A dictionary containing the historical weather data.
+    """
+
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "start_date": start_date,
+        "end_date": end_date,
+        "daily": ["temperature_2m_max", "temperature_2m_min", "precipitation_sum"],
+        "timezone": "Africa/Casablanca"
+    }
+
+    try:
+        logging.info(f"Fetching weather data for Lat: {latitude}, Lon: {longitude} from {start_date} to {end_date}...")
+        response = requests.get(BASE_URL, params=params, timeout=30)
+        response.raise_for_status()  # Raise an error for bad responses
+        data = response.json()
+        logging.info("Weather data fetched successfully.")
+        return data
+    except requests.RequestException as e:
+        logging.error(f"Error fetching weather data: {e}")
+        raise
+
+
+
+if __name__ == "__main__":
+    # Your test code here...
+    pass

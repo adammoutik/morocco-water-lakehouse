@@ -7,7 +7,6 @@ import boto3
 import hashlib
 import io
 from typing import Optional, Tuple
-
 load_dotenv()
 
 # -------------------------
@@ -116,31 +115,31 @@ def ingest_to_bronze_or_quarantine(
         - object_key: final key in Bronze or Quarantine
         - reason: None if ok, else reason for quarantine
     """
-    # init_bucket()  # ensure buckets exist
+    init_bucket()  # ensure buckets exist
 
-    # 1) Empty check
+
     if is_file_empty(file_bytes):
         reason = "empty_file"
         route_to_quarantine(file_bytes, base_key, reason)
         return False, f"quarantine/{base_key}", reason
 
-    # 2) Checksum
+
     checksum = compute_sha256(file_bytes)
 
-    # 3) Schema / structure validation
-    # Here we assume Excel (.xlsx). Adjust if you support other formats.
+
+    
     if not validate_excel_schema(file_bytes):
         reason = "schema_invalid_or_corrupt"
         route_to_quarantine(file_bytes, base_key, reason)
         return False, f"quarantine/{base_key}", reason
 
-    # 4) All checks passed → send to Bronze
+
     file_stream = io.BytesIO(file_bytes)
     s3_client.upload_fileobj(
         file_stream,
         BRONZE_BUCKET,
         base_key,
-        Metadata={"sha256": checksum},
+        ExtraArgs={"Metadata": {"sha256": checksum}},
     )
     logging.info(f"Successfully uploaded {base_key} to MinIO Bronze (sha256={checksum}).")
     return True, base_key, None
@@ -181,11 +180,10 @@ def download_resources(datasets):
                 file_bytes = response.content
 
                 # Decide base key depending on format / dataset
-                # Example: all Excel files for tensift_reservoirs
                 if file_format in ("xlsx", "xls"):
                     ext = ".xlsx"
                 else:
-                    ext = ""  # or handle other formats separately
+                    ext = ""  # TODO handle other formats separately
 
                 base_key = f"raw/tensift_reservoirs/{file_name}{ext}"
 
@@ -201,3 +199,32 @@ def download_resources(datasets):
 
             except requests.exceptions.RequestException as e:
                 logging.error(f"Failed to download resource {file_name}: {e}")
+
+
+def upload_json_to_minio(data_dict: dict, object_key: str) -> bool:
+    """
+    Serializes a Python dictionary to JSON and uploads it to MinIO.
+    """
+    try:
+        # Convert dict to JSON string, then to bytes
+        json_bytes = json.dumps(data_dict).encode('utf-8')
+        
+        # (reusing data quality logic)
+        checksum = hashlib.sha256(json_bytes).hexdigest()
+        
+         # Wrap in a file-like stream
+        file_stream = io.BytesIO(json_bytes)
+        
+        s3_client.upload_fileobj(
+            file_stream, 
+            "morocco-water-bronze", 
+            object_key,
+            ExtraArgs={"Metadata": {"sha256": checksum}}
+        )
+        
+        logging.info(f"Successfully uploaded JSON to {object_key}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to upload JSON to MinIO: {e}")
+        return False                
