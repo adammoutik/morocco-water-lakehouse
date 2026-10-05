@@ -24,11 +24,13 @@ s3_client = boto3.client(
 BRONZE_BUCKET = "morocco-water-bronze"
 QUARANTINE_BUCKET = "morocco-water-quarantine"
 
-for bucket in [BRONZE_BUCKET, QUARANTINE_BUCKET]:
-    try:
-        s3_client.head_bucket(Bucket=bucket)
-    except Exception:
-        s3_client.create_bucket(Bucket=bucket)
+
+def init_bucket():
+    for bucket in [BRONZE_BUCKET, QUARANTINE_BUCKET]:
+        try:
+            s3_client.head_bucket(Bucket=bucket)
+        except Exception:
+            s3_client.create_bucket(Bucket=bucket)
 
 # -------------------------
 # Checksum & validation
@@ -114,6 +116,8 @@ def ingest_to_bronze_or_quarantine(
         - object_key: final key in Bronze or Quarantine
         - reason: None if ok, else reason for quarantine
     """
+    # init_bucket()  # ensure buckets exist
+
     # 1) Empty check
     if is_file_empty(file_bytes):
         reason = "empty_file"
