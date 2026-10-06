@@ -1,7 +1,7 @@
 # ==========================================
 # 1. Secrets & Credentials (CRITICAL)
 # ==========================================
-# Never commit your MINIO keys, passwords, or API tokens
+
 .env
 .env.*
 *.pem
@@ -9,7 +9,7 @@
 # ==========================================
 # 2. Virtual Environments
 # ==========================================
-# These folders are massive and specific to your computer
+
 .venv/
 venv/
 env/
@@ -18,7 +18,7 @@ env/
 # ==========================================
 # 3. Python Cache & Compiled Files
 # ==========================================
-# Python generates these automatically, no need to save them
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -27,7 +27,7 @@ __pycache__/
 # ==========================================
 # 4. Testing & Coverage
 # ==========================================
-# Generated when you run your pytest commands
+
 .pytest_cache/
 .coverage
 htmlcov/
@@ -36,8 +36,7 @@ htmlcov/
 # ==========================================
 # 5. Local Data & Logs
 # ==========================================
-# Do not commit raw Excel, CSV, or Parquet files to GitHub
-# Your code should download them, not store them in the repo
+
 *.csv
 *.xlsx
 *.parquet
@@ -50,7 +49,7 @@ htmlcov/
 # ==========================================
 # 6. IDE & OS Files
 # ==========================================
-# Files created by VS Code or Windows
+
 .vscode/
 .idea/
 Thumbs.db
