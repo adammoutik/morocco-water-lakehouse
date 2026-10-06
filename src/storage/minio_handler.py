@@ -264,4 +264,44 @@ def upload_parquet_to_minio(df: pd.DataFrame,bucket_name: str, object_key: str) 
     except Exception as e:
         logging.error(f"Failed to upload Parquet to MinIO: {e}")
         return False
-          
+
+
+def get_excel_from_minio(bucket_name: str, object_key: str) -> pd.DataFrame:
+    """
+    Downloads an Excel file from MinIO and loads it directly into a Pandas DataFrame.
+    """
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        file_bytes = response['Body'].read()
+        
+        df = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
+        return df
+    except Exception as e:
+        logging.error(f"Failed to fetch Excel from {object_key}: {e}")
+        return pd.DataFrame()
+
+def list_objects_in_prefix(bucket_name: str, prefix: str) -> list:
+    """
+    Lists all object keys in a specific MinIO bucket under a given folder prefix.
+    """
+    try:
+        # Ensure the prefix ends with a slash so we only search inside that folder
+        if not prefix.endswith('/'):
+            prefix += '/'
+
+        # Query MinIO for all objects in this path
+        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        
+        keys = []
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                key = obj['Key']
+                # Skip the directory marker itself if MinIO returns it
+                if key != prefix:
+                    keys.append(key)
+                    
+        return keys
+        
+    except Exception as e:
+        logging.error(f"Failed to list objects in {bucket_name}/{prefix}: {e}")
+        return []
