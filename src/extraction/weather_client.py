@@ -45,6 +45,3 @@ def extract_historical_weather(latitude: float, longitude: float, start_date: st
 
 
 
-if __name__ == "__main__":
-    # Your test code here...
-    pass

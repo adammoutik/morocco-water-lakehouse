@@ -253,7 +253,7 @@ def upload_parquet_to_minio(df: pd.DataFrame,bucket_name: str, object_key: str) 
         df.to_parquet(parquet_buffer, engine='pyarrow', index=False)
 
         parquet_buffer.seek(0)
-
+        
         s3_client.upload_fileobj(
             parquet_buffer, 
             bucket_name, 
@@ -308,3 +308,17 @@ def list_objects_in_prefix(bucket_name: str, prefix: str) -> list:
     except Exception as e:
         logging.error(f"Failed to list objects in {bucket_name}/{prefix}: {e}")
         return []
+
+def get_parquet_from_minio(bucket_name: str, object_key: str) -> pd.DataFrame:
+    """
+    Downloads a Parquet file from MinIO and loads it directly into a Pandas DataFrame.
+    """
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        
+        # Read the binary stream into Pandas using the pyarrow engine
+        df = pd.read_parquet(io.BytesIO(response['Body'].read()), engine='pyarrow')
+        return df
+    except Exception as e:
+        logging.error(f"Failed to fetch Parquet from {object_key}: {e}")
+        return pd.DataFrame()

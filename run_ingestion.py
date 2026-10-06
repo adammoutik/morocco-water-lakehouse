@@ -26,7 +26,7 @@ def ingest_ckan_data():
 def ingest_weather_data():
     logging.info("=== STARTING WEATHER INGESTION ===")
     lat, lon = 31.63, -8.00
-    start_date, end_date = "2024-01-01", "2024-01-31"
+    start_date, end_date = "2026-08-01", "2026-09-30"
     object_key = f"raw/open_meteo/tensift_{start_date}_to_{end_date}.json"
 
     # Extract JSON
