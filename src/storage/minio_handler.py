@@ -7,6 +7,7 @@ import boto3
 import hashlib
 import io
 from typing import Optional, Tuple
+import pandas as pd
 load_dotenv()
 
 # -------------------------
@@ -59,7 +60,7 @@ def validate_excel_schema(file_bytes: bytes) -> bool:
         return False
 
     try:
-        import pandas as pd
+        
 
         xls = pd.ExcelFile(io.BytesIO(file_bytes))
         if len(xls.sheet_names) == 0:
@@ -227,4 +228,40 @@ def upload_json_to_minio(data_dict: dict, object_key: str) -> bool:
         
     except Exception as e:
         logging.error(f"Failed to upload JSON to MinIO: {e}")
-        return False                
+        return False      
+
+def get_json_from_minio(object_key: str) -> Optional[dict]:
+    """
+    Retrieves a JSON object from MinIO and returns it as a Python dictionary.
+    """
+    try:
+        response = s3_client.get_object(Bucket="morocco-water-bronze", Key=object_key)
+        file_content = response['Body'].read().decode('utf-8')
+        return json.loads(file_content)
+    except Exception as e:
+        logging.error(f"Failed to retrieve JSON from MinIO: {e}")
+        return {}
+
+
+def upload_parquet_to_minio(df: pd.DataFrame,bucket_name: str, object_key: str) -> bool:
+    """
+    Serializes a Pandas DataFrame to Parquet and uploads it to MinIO.
+    """
+    try:
+        parquet_buffer = io.BytesIO()
+        df.to_parquet(parquet_buffer, engine='pyarrow', index=False)
+        
+        s3_client.upload_fileobj(
+            parquet_buffer, 
+            bucket_name, 
+            object_key,
+            ExtraArgs={"ContentType": "application/octet-stream"}
+        )
+        
+        logging.info(f"Successfully uploaded Parquet to {object_key}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to upload Parquet to MinIO: {e}")
+        return False
+          
