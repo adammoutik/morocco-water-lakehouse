@@ -249,8 +249,11 @@ def upload_parquet_to_minio(df: pd.DataFrame,bucket_name: str, object_key: str) 
     """
     try:
         parquet_buffer = io.BytesIO()
+
         df.to_parquet(parquet_buffer, engine='pyarrow', index=False)
-        
+
+        parquet_buffer.seek(0)
+
         s3_client.upload_fileobj(
             parquet_buffer, 
             bucket_name, 
