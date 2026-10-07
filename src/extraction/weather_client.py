@@ -1,13 +1,13 @@
-import requests
-import logging 
-from dotenv import load_dotenv
 import os
+import logging
+import requests
+from dotenv import load_dotenv
 
 load_dotenv()
-BASE_URL = os.environ.get('OPEN_METEO_URL')
 
-# TODO configure it centrally
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+DEFAULT_OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
+BASE_URL = os.environ.get('OPEN_METEO_URL', DEFAULT_OPEN_METEO_URL)
+
 
 def extract_historical_weather(latitude: float, longitude: float, start_date: str, end_date: str) -> dict:
     """
@@ -22,6 +22,7 @@ def extract_historical_weather(latitude: float, longitude: float, start_date: st
     Returns:
         dict: A dictionary containing the historical weather data.
     """
+    url = os.environ.get('OPEN_METEO_URL', BASE_URL)
 
     params = {
         "latitude": latitude,
@@ -34,14 +35,17 @@ def extract_historical_weather(latitude: float, longitude: float, start_date: st
 
     try:
         logging.info(f"Fetching weather data for Lat: {latitude}, Lon: {longitude} from {start_date} to {end_date}...")
-        response = requests.get(BASE_URL, params=params, timeout=30)
-        response.raise_for_status()  # Raise an error for bad responses
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
         data = response.json()
+
+        # Check if the API returned an embedded error response
+        if isinstance(data, dict) and data.get("error"):
+            reason = data.get("reason", "Unknown Open-Meteo API error")
+            raise requests.RequestException(f"Open-Meteo API returned error: {reason}")
+
         logging.info("Weather data fetched successfully.")
         return data
     except requests.RequestException as e:
         logging.error(f"Error fetching weather data: {e}")
         raise
-
-
-

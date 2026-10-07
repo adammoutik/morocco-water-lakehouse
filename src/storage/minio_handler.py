@@ -22,15 +22,25 @@ s3_client = boto3.client(
 )
 
 BRONZE_BUCKET = "morocco-water-bronze"
+SILVER_BUCKET = "morocco-water-silver"
+GOLD_BUCKET = "morocco-water-gold"
 QUARANTINE_BUCKET = "morocco-water-quarantine"
+
+# All buckets required by the Medallion architecture
+ALL_BUCKETS = [BRONZE_BUCKET, SILVER_BUCKET, GOLD_BUCKET, QUARANTINE_BUCKET]
 
 
 def init_bucket():
-    for bucket in [BRONZE_BUCKET, QUARANTINE_BUCKET]:
+    """ensure all medallion and quarantine buckets exist."""
+    for bucket in ALL_BUCKETS:
         try:
             s3_client.head_bucket(Bucket=bucket)
         except Exception:
-            s3_client.create_bucket(Bucket=bucket)
+            try:
+                s3_client.create_bucket(Bucket=bucket)
+                logging.info(f"Created MinIO bucket: {bucket}")
+            except Exception as e:
+                logging.warning(f"Failed to create bucket {bucket}: {e}")
 
 # -------------------------
 # Checksum & validation
@@ -80,6 +90,45 @@ def validate_excel_schema(file_bytes: bytes) -> bool:
     except Exception:
         # Corrupt or unreadable Excel file
         return False
+
+
+REQUIRED_WEATHER_DAILY_KEYS = [
+    "time",
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "precipitation_sum",
+]
+
+
+def validate_weather_schema(data: dict) -> Tuple[bool, str]:
+    """validate open-meteo json payload structure and metric arrays."""
+    if not isinstance(data, dict) or not data:
+        return False, "empty_or_non_dict_payload"
+
+    if data.get("error"):
+        reason = data.get("reason", "api_error_response")
+        return False, f"api_error: {reason}"
+
+    if "latitude" not in data or "longitude" not in data:
+        return False, "missing_coordinates"
+
+    daily = data.get("daily")
+    if not isinstance(daily, dict) or not daily:
+        return False, "missing_or_empty_daily_key"
+
+    time_arr = daily.get("time")
+    if not isinstance(time_arr, list) or len(time_arr) == 0:
+        return False, "empty_daily_time_array"
+
+    n_records = len(time_arr)
+    for key in REQUIRED_WEATHER_DAILY_KEYS:
+        arr = daily.get(key)
+        if not isinstance(arr, list):
+            return False, f"missing_required_metric: {key}"
+        if len(arr) != n_records:
+            return False, f"length_mismatch: {key} has {len(arr)} items but time has {n_records}"
+
+    return True, ""
 
 
 def route_to_quarantine(file_bytes: bytes, object_key: str, reason: str) -> None:
@@ -180,13 +229,11 @@ def download_resources(datasets):
 
                 file_bytes = response.content
 
-                # Decide base key depending on format / dataset
-                if file_format in ("xlsx", "xls"):
-                    ext = ".xlsx"
-                else:
-                    ext = ""  # TODO handle other formats separately
+                # ensure file has extension without duplicating it
+                if file_format in ("xlsx", "xls") and not file_name.lower().endswith((".xlsx", ".xls")):
+                    file_name = f"{file_name}.xlsx"
 
-                base_key = f"raw/tensift_reservoirs/{file_name}{ext}"
+                base_key = f"raw/tensift_reservoirs/{file_name}"
 
                 ok, object_key, reason = ingest_to_bronze_or_quarantine(
                     file_bytes,
@@ -202,40 +249,65 @@ def download_resources(datasets):
                 logging.error(f"Failed to download resource {file_name}: {e}")
 
 
+def ingest_weather_to_bronze_or_quarantine(
+    data_dict: dict,
+    object_key: str
+) -> Tuple[bool, str, Optional[str]]:
+    """validate weather payload and upload to bronze or quarantine."""
+    init_bucket()
+
+    try:
+        json_bytes = json.dumps(data_dict).encode("utf-8")
+    except Exception:
+        json_bytes = b"{}"
+
+    checksum = compute_sha256(json_bytes)
+    is_valid, reason = validate_weather_schema(data_dict)
+
+    if not is_valid:
+        quarantine_key = f"quarantine/{object_key}"
+        file_stream = io.BytesIO(json_bytes)
+        s3_client.upload_fileobj(
+            file_stream,
+            QUARANTINE_BUCKET,
+            quarantine_key,
+            ExtraArgs={
+                "Metadata": {
+                    "sha256": checksum,
+                    "quarantine_reason": reason,
+                }
+            },
+        )
+        logging.warning(
+            f"Weather data quarantined: {quarantine_key} (reason={reason})"
+        )
+        return False, quarantine_key, reason
+
+    # Valid payload -> Upload to Bronze
+    file_stream = io.BytesIO(json_bytes)
+    s3_client.upload_fileobj(
+        file_stream,
+        BRONZE_BUCKET,
+        object_key,
+        ExtraArgs={"Metadata": {"sha256": checksum}},
+    )
+    logging.info(f"Successfully uploaded {object_key} to MinIO Bronze (sha256={checksum}).")
+    return True, object_key, None
+
+
 def upload_json_to_minio(data_dict: dict, object_key: str) -> bool:
     """
-    Serializes a Python dictionary to JSON and uploads it to MinIO.
+    Backwards-compatible wrapper delegating to ingest_weather_to_bronze_or_quarantine.
     """
-    try:
-        # Convert dict to JSON string, then to bytes
-        json_bytes = json.dumps(data_dict).encode('utf-8')
-        
-        # (reusing data quality logic)
-        checksum = hashlib.sha256(json_bytes).hexdigest()
-        
-         # Wrap in a file-like stream
-        file_stream = io.BytesIO(json_bytes)
-        
-        s3_client.upload_fileobj(
-            file_stream, 
-            "morocco-water-bronze", 
-            object_key,
-            ExtraArgs={"Metadata": {"sha256": checksum}}
-        )
-        
-        logging.info(f"Successfully uploaded JSON to {object_key}")
-        return True
-        
-    except Exception as e:
-        logging.error(f"Failed to upload JSON to MinIO: {e}")
-        return False      
+    ok, _, _ = ingest_weather_to_bronze_or_quarantine(data_dict, object_key)
+    return ok      
 
 def get_json_from_minio(object_key: str) -> Optional[dict]:
     """
     Retrieves a JSON object from MinIO and returns it as a Python dictionary.
     """
     try:
-        response = s3_client.get_object(Bucket="morocco-water-bronze", Key=object_key)
+        response = s3_client.get_object(Bucket=BRONZE_BUCKET, Key=object_key)
         file_content = response['Body'].read().decode('utf-8')
         return json.loads(file_content)
     except Exception as e:
