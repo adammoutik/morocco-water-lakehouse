@@ -1,10 +1,17 @@
 from datetime import datetime
 import logging
-from src.storage.minio_handler import get_parquet_from_minio, list_objects_in_prefix, upload_parquet_to_minio
-from src.transformations.gold_aggregation import build_gold_analytical_model
 import pandas as pd
+from src.storage.minio_handler import (
+    SILVER_BUCKET,
+    GOLD_BUCKET,
+    get_parquet_from_minio,
+    list_objects_in_prefix,
+    upload_parquet_to_minio
+)
+from src.transformations.gold_aggregation import build_gold_analytical_model
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 def load_all_parquets_from_prefix(bucket: str, prefix: str) -> pd.DataFrame:
     """
@@ -25,20 +32,18 @@ def load_all_parquets_from_prefix(bucket: str, prefix: str) -> pd.DataFrame:
             dfs.append(df)
             
     if dfs:
+        # concatenate discovered parquet partitions
         return pd.concat(dfs, ignore_index=True)
     return pd.DataFrame()
 
+
 def process_gold_pipeline():
     logging.info("=== STARTING GOLD PIPELINE ===")
-    
-    silver_bucket = "morocco-water-silver"
-    gold_bucket = "morocco-water-gold"
-    
     logging.info("--- Extracting Silver Weather Data ---")
-    weather_df = load_all_parquets_from_prefix(silver_bucket, "cleansed/open_meteo/")
+    weather_df = load_all_parquets_from_prefix(SILVER_BUCKET, "cleansed/open_meteo/")
     
     logging.info("--- Extracting Silver CKAN Data ---")
-    ckan_df = load_all_parquets_from_prefix(silver_bucket, "cleansed/ckan_reservoirs/")
+    ckan_df = load_all_parquets_from_prefix(SILVER_BUCKET, "cleansed/ckan_reservoirs/")
     
     if weather_df.empty or ckan_df.empty:
         logging.error("Failed to load sufficient Silver datasets. Aborting Gold pipeline.")
@@ -54,9 +59,10 @@ def process_gold_pipeline():
     gold_key = f"analytical/water_reliability_master_{execution_date}.parquet"
 
     logging.info(f"Writing master Gold dataset to: {gold_key}")
-    upload_parquet_to_minio(gold_df, gold_bucket, gold_key)
+    upload_parquet_to_minio(gold_df, GOLD_BUCKET, gold_key)
     
     logging.info("=== GOLD PIPELINE COMPLETE ===\n")
+
 
 if __name__ == "__main__":
     process_gold_pipeline()
