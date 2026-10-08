@@ -1,0 +1,85 @@
+version: 2
+
+models:
+  - name: dim_reservoir
+    description: "Conformed dimension containing physical characteristics and metadata for each dam reservoir"
+    columns:
+      - name: reservoir_id
+        description: "Surrogate primary key (MD5 hash of dam_id)"
+        tests:
+          - unique
+          - not_null
+
+      - name: dam_id
+        description: "Natural unique key for the reservoir"
+        tests:
+          - unique
+          - not_null
+
+      - name: display_name
+        description: "Official human-readable name of the dam"
+        tests:
+          - not_null
+
+      - name: capacity_mm3
+        description: "Maximum design reservoir storage capacity in Million cubic meters (Mm3)"
+        tests:
+          - not_null
+
+  - name: dim_date
+    description: "Conformed calendar date dimension table"
+    columns:
+      - name: date_id
+        description: "Surrogate integer key formatted as YYYYMMDD (e.g., 20260801)"
+        tests:
+          - unique
+          - not_null
+
+      - name: full_date
+        description: "Calendar date (YYYY-MM-DD)"
+        tests:
+          - unique
+          - not_null
+
+      - name: year
+        tests:
+          - not_null
+
+      - name: month
+        tests:
+          - not_null
+
+  - name: fact_reservoir_daily
+    description: "Central daily metrics fact table connecting reservoir levels with meteorological metrics"
+    columns:
+      - name: fact_id
+        description: "Surrogate primary key for the daily observation record"
+        tests:
+          - unique
+          - not_null
+
+      - name: date_id
+        description: "Foreign key referencing dim_date.date_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_id
+
+      - name: reservoir_id
+        description: "Foreign key referencing dim_reservoir.reservoir_id"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_reservoir')
+              field: reservoir_id
+
+      - name: reserve_mm3
+        description: "Current storage volume in Million cubic meters (Mm3)"
+        tests:
+          - not_null
+
+      - name: fill_pct
+        description: "Fill percentage rate (0 to 100)"
+        tests:
+          - not_null
