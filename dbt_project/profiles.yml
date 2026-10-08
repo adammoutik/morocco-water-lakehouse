@@ -1,0 +1,24 @@
+# ==============================================================================
+# dbt Connection Profiles: morocco_water_lakehouse
+# ==============================================================================
+# CONCEPT EXPLANATION: What is profiles.yml?
+# ------------------------------------------------------------------------------
+# profiles.yml holds the database connection credentials for target environments
+# (dev, staging, prod).
+# Using Jinja templating like {{ env_var('VAR_NAME', 'default_value') }} allows
+# credentials to be injected securely from Docker or CI/CD without hardcoding secrets.
+# ==============================================================================
+
+morocco_water_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      user: "{{ env_var('POSTGRES_USER', 'postgres') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'postgres') }}"
+      port: 5432
+      dbname: "{{ env_var('POSTGRES_DB', 'reservoir_db') }}"
+      schema: public
+      threads: 4
+      keepalives_idle: 0

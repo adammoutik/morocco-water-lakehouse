@@ -1,0 +1,40 @@
+# ==============================================================================
+# dbt Project Configuration: morocco_water_lakehouse
+# ==============================================================================
+# CONCEPT EXPLANATION: What is dbt_project.yml?
+# ------------------------------------------------------------------------------
+# This is the central manifest for your dbt project. It tells dbt:
+# 1. The project name and which database connection profile to use (from profiles.yml).
+# 2. Where to look for SQL models, tests, macros, and seeds.
+# 3. How to materialize each layer:
+#    - staging models are materialized as 'view' (lightweight virtual tables)
+#    - marts models (dimensions & facts) are materialized as 'table' (physical tables
+#      optimized for fast analytical dashboard queries).
+# ==============================================================================
+
+name: 'morocco_water_lakehouse'
+version: '1.0.0'
+config-version: 2
+
+# Profile name matching profiles.yml
+profile: 'morocco_water_lakehouse'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  morocco_water_lakehouse:
+    # Staging Layer: clean column aliases and types as views
+    staging:
+      +materialized: view
+    # Marts Layer: Star Schema dimensions and facts as persistent tables
+    marts:
+      +materialized: table

@@ -1,0 +1,34 @@
+version: 2
+
+sources:
+  - name: staging
+    schema: staging
+    description: "Raw staged data loaded from MinIO Silver Parquet into PostgreSQL"
+    tables:
+      - name: stg_reservoirs
+        description: "Normalized daily reservoir storage and fill measurements from Moroccan CKAN bulletins"
+        columns:
+          - name: date
+            description: "Observation calendar date"
+          - name: dam_id
+            description: "Standardized unique identifier for the dam reservoir"
+          - name: reserve_mm3
+            description: "Stored water reserve in Million cubic meters (Mm3)"
+          - name: fill_pct
+            description: "Reservoir fill rate percentage (0 - 100)"
+
+      - name: stg_weather
+        description: "Daily weather metrics extracted from Open-Meteo archive API"
+        columns:
+          - name: date
+            description: "Weather observation date"
+          - name: location_id
+            description: "Location identifier (dam site or tensift_basin)"
+          - name: location_type
+            description: "Location type classification: dam or basin"
+          - name: precip_mm
+            description: "Total daily precipitation in millimeters"
+          - name: max_temp_c
+            description: "Maximum daily temperature in Celsius"
+          - name: min_temp_c
+            description: "Minimum daily temperature in Celsius"
