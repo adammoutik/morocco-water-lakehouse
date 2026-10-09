@@ -1,8 +1,10 @@
 services:
-  # PostgreSQL
+  # PostgreSQL (Optional metadata store for future lakehouse catalog / relational sinks)
+  # NOTE: The core medallion pipeline currently runs directly against MinIO S3 object storage.
+  # This container can be kept for future metadata tracking or stopped if running in minimal resource environments.
   db:
     image: postgres:15-alpine
-    container_name: postgres_local
+    container_name: postgres_local__test
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -16,7 +18,7 @@ services:
   # MinIO (S3-compatible object storage)
   minio:
     image: cgr.dev/chainguard/minio:latest
-    container_name: minio_local
+    container_name: minio_local_test
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -27,6 +29,31 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - ./minio-data:/data
+
+  # Apache Airflow (Workflow Orchestrator - Standalone Mode)
+  # CONCEPT: Runs scheduler, webserver, and local executor in a single lightweight container.
+  # Accessible at http://localhost:8080 (credentials: admin / admin)
+  airflow:
+    image: apache/airflow:2.9.0-python3.11
+    container_name: airflow_local
+    restart: unless-stopped
+    depends_on:
+      - db
+      - minio
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - _AIRFLOW_DB_MIGRATE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../src:/opt/airflow/src
+      - ../dbt_project:/opt/airflow/dbt_project
+    ports:
+      - "8080:8080"
+    command: standalone
 
 volumes:
   pgdata:
