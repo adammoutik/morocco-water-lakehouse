@@ -17,46 +17,38 @@ Built following modern Data Engineering principles: **Defensive Ingestion Contra
 ## 🏛️ End-to-End System Architecture
 
 ```mermaid
-graph TD
-    subgraph Ingestion ["1. Automated Discovery & Perimeter Defense"]
-        CKAN["Morocco Open Data API (data.gov.ma)<br/>Daily Tensift Excel Bulletins"]
-        Meteo["Open-Meteo Climate API<br/>Multi-Station Temperature & Rain"]
-        Gatekeeper{"Defensive Gatekeeper<br/>Schema Contract & SHA-256"}
-        Quarantine[("morocco-water-quarantine<br/>Dead-Letter Queue (DLQ)")]
+flowchart LR
+    subgraph S1["1. Sources"]
+        direction TB
+        C["CKAN Bulletins"]
+        W["Open-Meteo API"]
     end
 
-    subgraph Storage ["2. Object Storage (MinIO S3)"]
-        Bronze[("morocco-water-bronze<br/>Raw Immutable Excel & JSON")]
-        Silver[("morocco-water-silver<br/>Cleaned Snappy Parquet")]
-        GoldStorage[("morocco-water-gold<br/>Master Analytical Parquet")]
+    subgraph S2["2. Perimeter Defense"]
+        direction TB
+        G{"Gatekeeper"}
+        Q[("Quarantine DLQ")]
     end
 
-    subgraph Warehouse ["3. Dimensional Data Warehouse (PostgreSQL + dbt)"]
-        Staging[("PostgreSQL staging<br/>stg_reservoirs | stg_weather")]
-        dbt["dbt Core Transformation Engine<br/>Surrogate Keys & LAG() Metrics"]
-        StarSchema[("Gold Star Schema<br/>dim_reservoir | dim_date<br/>fact_reservoir_daily")]
-        dbtTests{"dbt Quality Gate<br/>22 Automated Assertions"}
+    subgraph S3["3. MinIO S3"]
+        direction TB
+        B[("Bronze (Raw)")]
+        S[("Silver (Parquet)")]
     end
 
-    subgraph Presentation ["4. Orchestration & Presentation"]
-        Airflow["Apache Airflow DAG<br/>Scheduled Retries & Idempotency"]
-        Dashboard["Streamlit Analytics Portal<br/>Runway Simulator & Drawdown Rate"]
+    subgraph S4["4. Postgres & dbt"]
+        direction TB
+        STG[("Staging")]
+        DBT["dbt Star Schema"]
     end
 
-    CKAN --> Gatekeeper
-    Meteo --> Gatekeeper
-    Gatekeeper -- "Corrupted / Malformed" --> Quarantine
-    Gatekeeper -- "Valid Contract" --> Bronze
-    Bronze -->|"Cleaning & Parquetization"| Silver
-    Silver -->|"Truncate-and-Append Loader"| Staging
-    Staging --> dbt
-    dbt --> StarSchema
-    dbt --> dbtTests
-    Silver -->|"Analytical Redundancy"| GoldStorage
-    StarSchema --> Dashboard
-    Airflow -.->|"Orchestrates"| Ingestion
-    Airflow -.->|"Orchestrates"| Storage
-    Airflow -.->|"Orchestrates"| Warehouse
+    subgraph S5["5. Analytics"]
+        UI["Streamlit Portal"]
+    end
+
+    C & W --> G
+    G -.->|Invalid| Q
+    G -->|Valid| B --> S --> STG --> DBT --> UI
 ```
 
 ---

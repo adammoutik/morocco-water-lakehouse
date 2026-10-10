@@ -4,6 +4,7 @@
 
 .env
 .env.*
+!.env.example
 *.pem
 
 # ==========================================
@@ -52,9 +53,6 @@ dbt_project/target/
 dbt_project/logs/
 dbt_project/dbt_packages/
 dbt_project/.user.yml
-
-# private interview guide
-PFE_DEFENSE_GUIDE.md
 
 # ==========================================
 # 6. IDE & OS Files
