@@ -65,25 +65,25 @@ Public APIs and government bulletins frequently suffer from upstream drift, form
 ### 2. Medallion Storage Architecture (MinIO S3)
 - **Bronze Layer (`morocco-water-bronze`)**: Raw, immutable, append-only storage preserving exact upstream payloads with SHA-256 checksums in object metadata.
 - **Silver Layer (`morocco-water-silver`)**: Cleaned, standardized columnar files stored as Snappy-compressed **Apache Parquet**:
-  - Normalizes French month strings and removes diacritical accents (`Août` $\rightarrow$ `Aout`).
-  - Drops aggregate footer rows by strictly asserting calendar boundaries ($1 \le \text{day} \le 31$).
+  - Normalizes French month strings and removes diacritical accents (`Août` → `Aout`).
+  - Drops aggregate footer rows by strictly asserting calendar boundaries (`1 <= day <= 31`).
   - Parses French comma decimals into IEEE 754 floating-point numbers.
 - **Gold Layer (`morocco-water-gold`)**: Pre-aggregated analytical master Parquet files providing high-performance object storage redundancy.
 
 ### 3. Dimensional Modeling with dbt Core (PostgreSQL)
 Implements a Kimball-style Star Schema within PostgreSQL:
-- **`dim_reservoir`**: Dimension table containing dam metadata, hydrological river basin tags, total storage capacity ($\text{Mm}^3$), and deterministic surrogate keys (`MD5(dam_id)`).
+- **`dim_reservoir`**: Dimension table containing dam metadata, hydrological river basin tags, total storage capacity (Mm³), and deterministic surrogate keys (`MD5(dam_id)`).
 - **`dim_date`**: Temporal dimension with integer keys (`YYYYMMDD`), calendar day, month, year, and day of week.
-- **`fact_reservoir_daily`**: Daily fact grain containing current reserve volume ($\text{Mm}^3$), fill percentage ($0\% - 100\%$), and **Daily Drawdown Rate** ($\Delta V = V_t - V_{t-1}$) calculated via SQL window functions (`LAG()`).
+- **`fact_reservoir_daily`**: Daily fact grain containing current reserve volume (Mm³), fill percentage (0% - 100%), and **Daily Drawdown Rate** (ΔV = V_t - V_{t-1}) calculated via SQL window functions (`LAG()`).
 - **Automated Data Quality Suite (22 Tests)**:
   - Unique & Not-Null constraints on all surrogate and natural keys.
   - Foreign key referential integrity between fact and dimension tables.
-  - Value bounds enforcement ($0 \le \text{fill\_pct} \le 100$).
+  - Value bounds enforcement (`0 <= fill_pct <= 100`).
   - Singular SQL assertions verifying non-negative reserve volumes.
 
 ### 4. Hydrological Stress & Runway Simulator (Streamlit)
 Instead of applying fragile machine learning models to short historical time series, the dashboard computes actionable hydrological metrics:
-- **Zero-Rain Water Runway ($T_{\text{runway}}$)**: Projects the remaining operational days before each reservoir hits its critical dead-storage threshold ($20\%$ capacity) under zero-precipitation conditions:
+- **Zero-Rain Water Runway ($T_{\text{runway}}$)**: Projects the remaining operational days before each reservoir hits its critical dead-storage threshold (20% capacity) under zero-precipitation conditions:
   $$T_{\text{runway}} = \frac{V_{\text{current}} - V_{\text{critical}}}{\bar{D}_{\text{daily}}}$$
 - **Drawdown Trend Analysis**: Tracks daily net depletion rates across the basin.
 - **Runoff Lag Cross-Correlation**: Evaluates rainfall-to-inflow response times across mountain catchment areas.
@@ -165,7 +165,7 @@ docker compose -f infrastructure/docker-compose.yml up -d db minio
 - **PostgreSQL**: `localhost:5432` (User: `postgres`, Password: `postgres`, DB: `reservoir_db`)
 
 ### 4. Run the Full End-to-End Pipeline
-Execute all 8 steps in sequence (Extraction $\rightarrow$ Quarantine $\rightarrow$ Bronze $\rightarrow$ Silver $\rightarrow$ Postgres Staging $\rightarrow$ dbt Models $\rightarrow$ dbt Tests $\rightarrow$ Gold Parquet):
+Execute all 8 steps in sequence (Extraction → Quarantine → Bronze → Silver → Postgres Staging → dbt Models → dbt Tests → Gold Parquet):
 ```bash
 python run_lakehouse_pipeline.py
 ```
@@ -188,7 +188,7 @@ streamlit run app.py
 ```
 Open [http://localhost:8501](http://localhost:8501) in your browser to explore:
 - **Basin Overview**: Aggregate storage capacity, current reserves, and live fill rates.
-- **Reservoir Profiles**: Historical drawdown rates ($\Delta V$) and elevation curves.
+- **Reservoir Profiles**: Historical drawdown rates (ΔV) and elevation curves.
 - **Hydrological Stress & Runway Simulator**: Zero-rain depletion timelines and mountain runoff cross-correlation.
 
 ---
@@ -199,7 +199,7 @@ Open [http://localhost:8501](http://localhost:8501) in your browser to explore:
 |---|---|---|---|
 | **Perimeter** | Python + Hashlib | SHA-256 Checksums, Quarantine DLQ | Contract validation, array length verification |
 | **Bronze** | MinIO (S3) | Raw Excel bulletins, Raw JSON weather | Immutable storage, digital fingerprint metadata |
-| **Silver** | MinIO (S3) + Parquet | Cleaned reservoir & weather Parquets | Accent removal, row filter ($1 \le \text{day} \le 31$), decimal parsing |
+| **Silver** | MinIO (S3) + Parquet | Cleaned reservoir & weather Parquets | Accent removal, row filter (`1 <= day <= 31`), decimal parsing |
 | **Staging** | PostgreSQL | `staging.stg_reservoirs`, `stg_weather` | Truncate-and-Append staging handoff |
 | **Gold (Warehouse)** | dbt + PostgreSQL | `dim_reservoir`, `dim_date`, `fact_reservoir_daily` | MD5 surrogate keys, `LAG()` drawdown, 22 dbt assertions |
 | **Gold (Storage)** | MinIO (S3) | `water_reliability_master_*.parquet` | Master analytical snapshot for external consumption |
