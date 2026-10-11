@@ -149,5 +149,9 @@ def build_gold_analytical_model(weather_df: pd.DataFrame, ckan_df: pd.DataFrame)
     # deduplicate by date and dam_id and sort chronologically
     gold_df = gold_df.drop_duplicates(subset=["date", "dam_id"]).sort_values(["dam_id", "date"]).reset_index(drop=True)
 
+    # enrich model with hydrological anomaly detection flags
+    from src.transformations.anomaly_detection import detect_hydrological_anomalies
+    gold_df = detect_hydrological_anomalies(gold_df)
+
     logging.info("Gold table successfully created with shape: %s (grain: date x dam_id)", gold_df.shape)
     return gold_df

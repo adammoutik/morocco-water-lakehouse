@@ -19,11 +19,11 @@ def detect_hydrological_anomalies(
     reasons = []
 
     # ensure working columns exist
-    has_fill = "fill_percentage" in result.columns or "fill_ratio_pct" in result.columns
-    fill_col = "fill_percentage" if "fill_percentage" in result.columns else "fill_ratio_pct"
+    has_fill = any(c in result.columns for c in ["fill_percentage", "fill_ratio_pct", "fill_pct"])
+    fill_col = next((c for c in ["fill_percentage", "fill_ratio_pct", "fill_pct"] if c in result.columns), None)
 
-    has_volume = "current_volume_mm3" in result.columns or "reserve_volume_mm3" in result.columns
-    vol_col = "current_volume_mm3" if "current_volume_mm3" in result.columns else "reserve_volume_mm3"
+    has_volume = any(c in result.columns for c in ["current_volume_mm3", "reserve_volume_mm3", "reserve_mm3"])
+    vol_col = next((c for c in ["current_volume_mm3", "reserve_volume_mm3", "reserve_mm3"] if c in result.columns), None)
 
     anomaly_flags = pd.Series(False, index=result.index)
     anomaly_reasons = pd.Series("", index=result.index)
