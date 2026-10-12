@@ -34,6 +34,16 @@ default_args = {
 
 # task callables
 
+def task_preflight_api_healthcheck_callable():
+    """probe upstream api reachability before starting ingestion."""
+    from src.extraction.api_healthcheck import run_preflight_healthchecks
+    logging.info("running pre-flight healthchecks on upstream endpoints...")
+    results = run_preflight_healthchecks()
+    if not results.get("all_healthy"):
+        logging.warning("one or more upstream apis returned degraded response: %s", results)
+    return results
+
+
 def task_ingest_ckan_bronze_callable():
     """ingest tensift reservoir bulletins to bronze."""
     from run_ingestion import ingest_ckan_data
@@ -41,12 +51,6 @@ def task_ingest_ckan_bronze_callable():
     ingest_ckan_data(query="tensift", rows=10)
 
 
-def task_ingest_weather_bronze_callable():
-    """
-    Step 1B: Ingest Multi-Station Weather Records to Bronze.
-    Queries Open-Meteo API for basin center and all 5 dams, validates JSON schema
-    contract (array dimensions and required metrics), and uploads to MinIO Bronze.
-    """
 def task_ingest_weather_bronze_callable():
     """ingest multi-station weather records to bronze."""
     from run_ingestion import ingest_weather_data
@@ -100,6 +104,15 @@ def task_gold_parquet_backup_callable():
     process_gold_pipeline()
 
 
+def task_audit_pipeline_telemetry_callable():
+    """record execution audit log and pipeline metrics."""
+    from src.storage.audit_logger import PipelineAuditLogger
+    logger = PipelineAuditLogger()
+    summary = logger.get_summary()
+    logging.info("pipeline execution completed. audit summary: %s", summary)
+    return summary
+
+
 # dag definition
 if DAG is not None:
     with DAG(
@@ -112,6 +125,11 @@ if DAG is not None:
         max_active_runs=1,
         tags=["lakehouse", "morocco", "water_reliability", "dbt", "minio", "postgres"],
     ) as dag:
+
+        preflight_api_healthcheck = PythonOperator(
+            task_id="preflight_api_healthcheck",
+            python_callable=task_preflight_api_healthcheck_callable,
+        )
 
         ingest_ckan_bronze = PythonOperator(
             task_id="ingest_ckan_bronze",
@@ -153,9 +171,16 @@ if DAG is not None:
             python_callable=task_gold_parquet_backup_callable,
         )
 
+        audit_pipeline_telemetry = PythonOperator(
+            task_id="audit_pipeline_telemetry",
+            python_callable=task_audit_pipeline_telemetry_callable,
+        )
+
         # dependencies
+        preflight_api_healthcheck >> [ingest_ckan_bronze, ingest_weather_bronze]
         ingest_ckan_bronze >> transform_ckan_silver
         ingest_weather_bronze >> transform_weather_silver
         [transform_ckan_silver, transform_weather_silver] >> load_silver_to_postgres
         load_silver_to_postgres >> dbt_run_star_schema
         dbt_run_star_schema >> [dbt_test_assertions, build_gold_minio_parquet]
+        [dbt_test_assertions, build_gold_minio_parquet] >> audit_pipeline_telemetry

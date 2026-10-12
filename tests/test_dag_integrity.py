@@ -30,6 +30,7 @@ def test_dag_callables_importable():
     import dags.morocco_water_lakehouse_dag as dag_mod
 
     expected_callables = [
+        "task_preflight_api_healthcheck_callable",
         "task_ingest_ckan_bronze_callable",
         "task_ingest_weather_bronze_callable",
         "task_transform_ckan_silver_callable",
@@ -38,6 +39,7 @@ def test_dag_callables_importable():
         "task_dbt_run_callable",
         "task_dbt_test_callable",
         "task_gold_parquet_backup_callable",
+        "task_audit_pipeline_telemetry_callable",
     ]
 
     for callable_name in expected_callables:
