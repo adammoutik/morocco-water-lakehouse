@@ -549,37 +549,3 @@ with tab_runway:
         ),
         use_container_width=True,
     )
-
-    # Rainfall Runoff Response (Lag Correlation Analysis)
-    st.markdown("---")
-    st.subheader("Catchment Runoff Lag Response (Feature Analysis)")
-    st.caption(
-        "Cross-correlation between daily rainfall and reservoir storage change (ΔV). "
-        "Shows how many days after rain the storage responds."
-    )
-
-    lag_data = []
-    for d_id, group in period.groupby("dam_id"):
-        g = group.sort_values("date")
-        if "delta_reserve_mm3" in g.columns:
-            delta = g["delta_reserve_mm3"].fillna(0)
-        else:
-            delta = g["reserve_mm3"].diff().fillna(0)
-
-        lag_row = {"Reservoir": display_name_for(d_id)}
-        for lag in [0, 1, 2, 3]:
-            rain_shifted = g["precip_mm"].shift(lag).fillna(0)
-            corr = delta.corr(rain_shifted)
-            lag_row[f"Lag {lag}d"] = round(float(corr), 3) if pd.notna(corr) else 0.0
-        lag_data.append(lag_row)
-
-    lag_df = pd.DataFrame(lag_data)
-    st.dataframe(
-        lag_df.style.background_gradient(cmap="Blues", subset=["Lag 0d", "Lag 1d", "Lag 2d", "Lag 3d"]),
-        use_container_width=True
-    )
-    st.caption(
-        "**Hydrological Finding:** Notice how mountain-foothill dams (e.g. BGE Moulay Abderrahmane, Lalla Takerkoust) "
-        "exhibit strong positive response at **Lag 1d** (surging 24 hours after rainfall events), whereas plain reservoirs "
-        "absorb summer precipitation into dry soils before contributing significant stream runoff."
-    )

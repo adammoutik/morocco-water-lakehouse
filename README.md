@@ -86,7 +86,6 @@ Instead of applying fragile machine learning models to short historical time ser
 - **Zero-Rain Water Runway ($T_{\text{runway}}$)**: Projects the remaining operational days before each reservoir hits its critical dead-storage threshold (20% capacity) under zero-precipitation conditions:
   $$T_{\text{runway}} = \frac{V_{\text{current}} - V_{\text{critical}}}{\bar{D}_{\text{daily}}}$$
 - **Drawdown Trend Analysis**: Tracks daily net depletion rates across the basin.
-- **Runoff Lag Cross-Correlation**: Evaluates rainfall-to-inflow response times across mountain catchment areas.
 - **Water Stress Risk Tiers**: Categorizes reservoirs into `CRITICAL`, `ALERT`, `VIGILANCE`, and `NORMAL` status with actionable conservation protocols.
 
 ### 5. Automated Anomaly Detection & Pipeline Telemetry
@@ -105,7 +104,6 @@ Instead of applying fragile machine learning models to short historical time ser
 
 ```
 .
-├── .github/workflows/ci.yml               # Automated GitHub Actions CI workflow
 ├── dags/
 │   └── morocco_water_lakehouse_dag.py     # Production Apache Airflow DAG
 ├── dbt_project/
@@ -208,7 +206,7 @@ streamlit run app.py
 Open [http://localhost:8501](http://localhost:8501) in your browser to explore:
 - **Basin Overview**: Aggregate storage capacity, current reserves, and live fill rates.
 - **Reservoir Profiles**: Historical drawdown rates (ΔV) and elevation curves.
-- **Hydrological Stress & Runway Simulator**: Zero-rain depletion timelines and mountain runoff cross-correlation.
+- **Hydrological Stress & Runway Simulator**: Zero-rain depletion timelines and what-if drought scenario simulation.
 
 ---
 
@@ -222,7 +220,7 @@ Open [http://localhost:8501](http://localhost:8501) in your browser to explore:
 | **Staging** | PostgreSQL | `staging.stg_reservoirs`, `stg_weather` | Truncate-and-Append staging handoff |
 | **Gold (Warehouse)** | dbt + PostgreSQL | `dim_reservoir`, `dim_date`, `fact_reservoir_daily` | MD5 surrogate keys, `LAG()` drawdown, 22 dbt assertions |
 | **Gold (Storage)** | MinIO (S3) | `water_reliability_master_*.parquet` | Master analytical snapshot for external consumption |
-| **Analytics** | Streamlit | Hydrological Runway, Drawdown curves | Zero-rain runway formula, lag cross-correlation |
+| **Analytics** | Streamlit | Hydrological Runway, Drawdown curves | Zero-rain runway formula, what-if drought simulation |
 | **Orchestration** | Apache Airflow | `morocco_tensift_water_lakehouse` DAG | Daily schedule, retries, dependency branching |
 
 ---
