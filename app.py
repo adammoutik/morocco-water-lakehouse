@@ -193,6 +193,23 @@ st.sidebar.caption(
     "mountain and plain catchments."
 )
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("📥 Export Data")
+csv_data = period.to_csv(index=False).encode("utf-8")
+st.sidebar.download_button(
+    label="Download Period CSV",
+    data=csv_data,
+    file_name="tensift_water_lakehouse.csv",
+    mime="text/csv",
+)
+json_data = period.to_json(orient="records", date_format="iso").encode("utf-8")
+st.sidebar.download_button(
+    label="Download Period JSON",
+    data=json_data,
+    file_name="tensift_water_lakehouse.json",
+    mime="application/json",
+)
+
 latest = dam_df.iloc[-1]
 latest_fill = latest.get("fill_pct")
 status_label, status_color = fill_status(latest_fill)
@@ -462,18 +479,30 @@ with tab_runway:
 
     # Interactive Drought Scenario Simulator
     st.subheader("Drought Runway Simulation (What-If Analysis)")
-    sim_days = st.slider(
-        "Simulate prolonged dry spell (Zero rainfall for N consecutive days):",
-        min_value=15,
-        max_value=180,
-        value=60,
-        step=15,
-        help="Simulates reservoir depletion assuming current median draw continues without rain."
-    )
+    sim_col1, sim_col2 = st.columns(2)
+    with sim_col1:
+        sim_days = st.slider(
+            "Zero-Rain Duration (consecutive days):",
+            min_value=15,
+            max_value=180,
+            value=60,
+            step=15,
+            help="Simulates reservoir depletion assuming current median draw continues without rain."
+        )
+    with sim_col2:
+        demand_shock = st.slider(
+            "Drawdown Acceleration / Heatwave Shock (+%):",
+            min_value=0,
+            max_value=50,
+            value=0,
+            step=5,
+            help="Models increased evaporation and peak irrigation demand."
+        )
 
     sim_df = runway_df.copy()
-    # Projected Volume = Current Volume - (Daily Drawdown in Mm3 * sim_days)
-    sim_df["projected_volume"] = sim_df["current_volume_mm3"] - (sim_df["daily_drawdown_k_m3"] / 1000.0 * sim_days)
+    multiplier = 1.0 + (demand_shock / 100.0)
+    # Projected Volume = Current Volume - (Daily Drawdown in Mm3 * multiplier * sim_days)
+    sim_df["projected_volume"] = sim_df["current_volume_mm3"] - (sim_df["daily_drawdown_k_m3"] * multiplier / 1000.0 * sim_days)
     sim_df["projected_fill_pct"] = (sim_df["projected_volume"] / sim_df["capacity_mm3"] * 100.0).clip(lower=0.0)
 
     # Simulation Horizontal Comparison
@@ -489,19 +518,37 @@ with tab_runway:
     fig_sim.add_trace(go.Bar(
         y=sim_df["reservoir"],
         x=sim_df["projected_fill_pct"],
-        name=f"Projected Fill after {sim_days} days without rain",
+        name=f"Projected ({sim_days}d dry +{demand_shock}% draw)",
         orientation="h",
         marker_color=[STRESS_RED if v < 20 else STRESS_AMBER if v < 40 else STRESS_GREEN for v in sim_df["projected_fill_pct"]],
         hovertemplate="%{y}<br>Projected: %{x:.1f}%<extra></extra>",
     ))
     fig_sim.add_vline(x=20, line_dash="dash", line_color=STRESS_RED, annotation_text="20% Crisis Threshold")
     fig_sim.update_layout(
-        title=f"Reservoir Capacity Projected After {sim_days} Dry Days",
+        title=f"Reservoir Capacity Projected After {sim_days} Dry Days (+{demand_shock}% Drawdown Shock)",
         xaxis=dict(title="Fill Rate (%)", range=[0, 100], showgrid=False),
         yaxis=dict(title=""),
         barmode="group",
     )
     st.plotly_chart(apply_chart_layout(fig_sim, height=380), use_container_width=True)
+
+    # Official Hydrological Stress Alert Status
+    st.markdown("---")
+    st.subheader("Official Water Stress Alert Classification")
+    from src.transformations.stress_classifier import add_stress_classification
+    stress_overview = add_stress_classification(runway_df)
+    st.dataframe(
+        stress_overview[["reservoir", "fill_pct", "runway_days", "stress_tier", "recommended_action"]].rename(
+            columns={
+                "reservoir": "Reservoir",
+                "fill_pct": "Fill Rate (%)",
+                "runway_days": "Zero-Rain Runway (Days)",
+                "stress_tier": "Risk Tier",
+                "recommended_action": "Action Protocol",
+            }
+        ),
+        use_container_width=True,
+    )
 
     # Rainfall Runoff Response (Lag Correlation Analysis)
     st.markdown("---")
