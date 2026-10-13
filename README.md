@@ -87,8 +87,14 @@ Instead of applying fragile machine learning models to short historical time ser
   $$T_{\text{runway}} = \frac{V_{\text{current}} - V_{\text{critical}}}{\bar{D}_{\text{daily}}}$$
 - **Drawdown Trend Analysis**: Tracks daily net depletion rates across the basin.
 - **Runoff Lag Cross-Correlation**: Evaluates rainfall-to-inflow response times across mountain catchment areas.
+- **Water Stress Risk Tiers**: Categorizes reservoirs into `CRITICAL`, `ALERT`, `VIGILANCE`, and `NORMAL` status with actionable conservation protocols.
 
-### 5. Orchestration (Apache Airflow)
+### 5. Automated Anomaly Detection & Pipeline Telemetry
+- **Hydrological Anomaly Engine**: Automatically detects sensor out-of-bounds errors, sudden impossible daily volume spikes (>25%), and statistical drawdown outliers ($|z| > 3.0$).
+- **Pipeline Telemetry Logger**: Captures step durations, rows processed, throughput, and error diagnostics into structured audit logs.
+- **Pre-flight API Healthchecks**: Probes upstream government portals and Open-Meteo latency before starting ingestion.
+
+### 6. Orchestration (Apache Airflow)
 - Encapsulated in [`dags/morocco_water_lakehouse_dag.py`](dags/morocco_water_lakehouse_dag.py) with automated retries (`retries=2, retry_delay=2m`), SLA monitoring, and dependency branching.
 - **Idempotency Guarantee**: Safely rerunnable at any time; staging loaders use a transactional Truncate-and-Append pattern, and Bronze layers use digital fingerprinting.
 - **Parallelism**: CKAN extraction and Open-Meteo extraction run concurrently on separate branches.
@@ -99,6 +105,7 @@ Instead of applying fragile machine learning models to short historical time ser
 
 ```
 .
+├── .github/workflows/ci.yml               # Automated GitHub Actions CI workflow
 ├── dags/
 │   └── morocco_water_lakehouse_dag.py     # Production Apache Airflow DAG
 ├── dbt_project/
@@ -108,26 +115,32 @@ Instead of applying fragile machine learning models to short historical time ser
 │   │   ├── staging/                       # Staging views (stg_reservoirs, stg_weather)
 │   │   └── marts/                         # Star Schema (dim_reservoir, dim_date, fact_reservoir_daily)
 │   └── tests/                             # Custom singular dbt data tests
+├── docs/
+│   ├── DATA_DICTIONARY.md                 # Kimball star schema specifications
+│   └── adr/                               # Architecture Decision Records (ADRs)
 ├── infrastructure/
-│   └── docker-compose.yml                 # PostgreSQL, MinIO, and Airflow service definitions
+│   ├── docker-compose.yml                 # PostgreSQL, MinIO, and Airflow service definitions
+│   └── scripts/backup_warehouse.py        # Logical warehouse backup & rotation
 ├── src/
-│   ├── config/
-│   │   └── locations.py                   # Station coordinates and reservoir metadata
+│   ├── config/locations.py                # Station coordinates and reservoir metadata
 │   ├── extraction/
 │   │   ├── extract_ck.py                  # CKAN API client with dynamic discovery
-│   │   └── weather_client.py              # Open-Meteo multi-coordinate client
+│   │   ├── weather_client.py              # Open-Meteo multi-coordinate client
+│   │   └── api_healthcheck.py             # Pre-flight API reachability probes
 │   ├── storage/
 │   │   ├── minio_handler.py               # S3 handler with SHA-256 and Quarantine routing
-│   │   └── load_silver_to_postgres.py     # Truncate-and-Append PostgreSQL staging loader
+│   │   ├── load_silver_to_postgres.py     # Truncate-and-Append PostgreSQL staging loader
+│   │   ├── audit_logger.py                # Pipeline execution telemetry logger
+│   │   └── parquet_compaction.py          # Hive-partitioned Parquet compactor
 │   └── transformations/
 │       ├── ckan_silver.py                 # French text normalization & decimal cleaning
 │       ├── weather_silver.py              # Weather JSON flattening & Parquet encoding
-│       └── gold_aggregation.py            # Deduplication & analytical joins
-├── tests/                                 # Pytest suite (18 unit, integration, & DAG tests)
+│       ├── gold_aggregation.py            # Deduplication & analytical joins
+│       ├── anomaly_detection.py           # Bounds and Z-score outlier engine
+│       └── stress_classifier.py           # Multi-tier hydrological risk classifier
+├── tests/                                 # Pytest test suite (unit, integration & DAG tests)
 ├── app.py                                 # Streamlit dashboard & Hydrological Runway Simulator
-├── run_ingestion.py                       # Bronze extraction & quarantine runner
-├── run_silver_pipeline.py                 # Silver Parquet transformation runner
-├── run_warehouse_pipeline.py              # Postgres loader + dbt runner
+├── manage.py                              # Unified Lakehouse management CLI interface
 ├── run_lakehouse_pipeline.py              # Full end-to-end local orchestrator
 ├── requirements.txt                       # Project Python dependencies
 └── README.md                              # Project documentation
@@ -165,9 +178,15 @@ docker compose -f infrastructure/docker-compose.yml up -d db minio
 - **PostgreSQL**: `localhost:5432` (User: `postgres`, Password: `postgres`, DB: `reservoir_db`)
 
 ### 4. Run the Full End-to-End Pipeline
-Execute all 8 steps in sequence (Extraction → Quarantine → Bronze → Silver → Postgres Staging → dbt Models → dbt Tests → Gold Parquet):
+Execute all steps in sequence (Extraction → Quarantine → Bronze → Silver → Postgres Staging → dbt Models → dbt Tests → Gold Parquet):
 ```bash
+# Option A: Full end-to-end orchestrator
 python run_lakehouse_pipeline.py
+
+# Option B: Unified Management CLI (healthcheck, individual layers, or audit)
+python manage.py healthcheck
+python manage.py run --layer all
+python manage.py audit
 ```
 
 ### 5. Run the Automated Test Suites
